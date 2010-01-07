@@ -21,7 +21,7 @@
 # 
 
 COUCH_ROOT = "#{File.dirname(__FILE__)}/../.." unless defined?(COUCH_ROOT)
-LANGUAGE = ENV["QS_LANG"] || "js"
+LANGUAGE = ENV["QS_LANG"] || "python"
 
 puts "Running query server specs for #{LANGUAGE} query server"
 
@@ -117,7 +117,8 @@ class QueryServerRunner < OSProcessRunner
 
   COMMANDS = {
     "js" => "#{COUCH_ROOT}/bin/couchjs_dev #{COUCH_ROOT}/share/server/main.js",
-    "erlang" => "#{COUCH_ROOT}/test/view_server/run_native_process.es"
+    "erlang" => "#{COUCH_ROOT}/test/view_server/run_native_process.es",
+    "python" => "#{COUCH_ROOT}/test/run_python_views.py",
   }
 
   def self.run_command
@@ -134,8 +135,110 @@ end
 # we could organize this into a design document per language.
 # that would make testing future languages really easy.
 
+python_views = {
+  "emit-twice" => "@map_function
+def mymap(doc):
+    emit('foo', doc['a'])
+    emit('bar', doc['a'])
+",
+  "emit-once" => "@map_function
+def mymap(doc):
+    emit('baz', doc['a'])
+",
+  "reduce-values-length" => "@reduce_function
+def myreduce(length, rereduce): return length
+",
+  "reduce-values-sum" => "@reduce_function
+def myreduce(values=None, rereduce=False):
+    return sum(values)
+",
+  "validate-forbidden" => "@validate_function
+def myvalidate(new, old, user):
+    if 'bad' in new and new['bad']:
+        raise Exception({'forbidden':'bad doc'})
+",
+  "show-simple" => "@show_function
+def myshow(doc, request):
+    return ' - '.join([doc['title'], doc['body']])
+",
+  "show-headers" => "@show_function
+def myshow(doc, request):
+    return {'code':200, 'headers':{'X-Plankton':'Rusty'}, 'body':' - '.join([doc['title'],doc['body']])}
+",
+  "show-sends" => "class MyListView(ListView):
+    def start(self, head, request):
+        return ['first chunk', 'second \"chunk\"'], {'headers':{'Content-Type' : 'text/plain'}}
+    def end(self):
+        return 'tail'
+",
+  "show-while-get-rows" => "class MyListView(ListView):
+    def start(self, head, request):
+        return ['first chunk', request['q']], {}
+    def handle_row(self, row):
+        return row['key']
+    def end(self):
+        return 'tail'
+",
+  "show-while-get-rows-multi-send" => "class MyListView(ListView):
+    def start(self, head, request):
+        return ['bacon'], {}
+    def handle_row(self, row):
+        return [row['key'], 'eggs']
+    def end(self):
+        return 'tail'
+",
+  "list-simple" => "class MyListView(ListView):
+    def start(self, head, request):
+        return ['first chunk', request['q']], {}
+    def handle_row(self, row):
+        return row['key']
+    def end(self):
+        return 'early'
+",
+  "list-chunky" => "class MyListView(ListView):
+    def start(self, head, request):
+        return ['first chunk', request['q']], {}
+    def handle_row(self, row):
+        if self.index > 1:
+            raise EndList(row['key'], 'early tail')
+        else:
+            return row['key']
+",
+  "list-capped" => "class MyListView(ListView):
+    def start(self, head, request):
+        return ['bacon'], {}
+    def handle_row(self, row):
+        if self.index > 1:
+            raise EndList(row['key'], 'early')
+        else:
+            return row['key']
+",
+  "list-raw" => "class MyListView(ListView):
+    def start(self, head, request):
+        return ['first chunk', request['q']], {}
+    def handle_row(self, row):
+        return row['key']
+    def end(self):
+        return 'tail'
+",
+  "filter-basic" => "@filter_function
+def myfilter(doc, request):
+    if doc.get('good',None):
+        return True
+",
+  "update-basic" => "@update_function
+def myupdate(doc, request):
+    doc['world'] = 'hello'
+    return doc, 'hello doc'
+",
+  "error" => "
+  "
+}
+
+
 functions = {
   "emit-twice" => {
+    "python" => python_views["emit-twice"],
     "js" => %{function(doc){emit("foo",doc.a); emit("bar",doc.a)}},
     "erlang" => <<-ERLANG
       fun({Doc}) ->
@@ -146,6 +249,7 @@ functions = {
     ERLANG
   },
   "emit-once" => {
+    "python" => python_views["emit-once"],
     "js" => <<-JS,
       function(doc){
         emit("baz",doc.a)
@@ -159,14 +263,17 @@ functions = {
     ERLANG
   },
   "reduce-values-length" => {
+    "python" => python_views["reduce-values-length"],
     "js" => %{function(keys, values, rereduce) { return values.length; }},
     "erlang" => %{fun(Keys, Values, ReReduce) -> length(Values) end.}
   },
   "reduce-values-sum" => {
+    "python" => python_views["reduce-values-sum"],
     "js" => %{function(keys, values, rereduce) { return sum(values); }},
     "erlang" => %{fun(Keys, Values, ReReduce) -> lists:sum(Values) end.}
   },
   "validate-forbidden" => {
+    "python" => python_views["validate-forbidden"],
     "js" => <<-JS,
       function(newDoc, oldDoc, userCtx) {
         if(newDoc.bad)
@@ -183,6 +290,7 @@ functions = {
     ERLANG
   },
   "show-simple" => {
+    "python" => python_views["show-simple"],
     "js" => <<-JS,
         function(doc, req) {
             log("ok");
@@ -199,6 +307,7 @@ functions = {
     ERLANG
   },
   "show-headers" => {
+    "python" => python_views["show-headers"],
     "js" => <<-JS,
         function(doc, req) {
           var resp = {"code":200, "headers":{"X-Plankton":"Rusty"}};
@@ -220,6 +329,7 @@ functions = {
     ERLANG
   },
   "show-sends" => {
+    "python" => python_views["show-sends"],
     "js" =>  <<-JS,
         function(head, req) {
           start({headers:{"Content-Type" : "text/plain"}});
@@ -241,6 +351,7 @@ functions = {
     ERLANG
   },
   "show-while-get-rows" => {
+    "python" => python_views["show-while-get-rows"],
     "js" =>  <<-JS,
         function(head, req) {
           send("first chunk");
@@ -267,6 +378,7 @@ functions = {
     ERLANG
   },
   "show-while-get-rows-multi-send" => {
+    "python" => python_views["show-while-get-rows-multi-send"],
     "js" => <<-JS,
         function(head, req) {
           send("bacon");
@@ -293,6 +405,7 @@ functions = {
     ERLANG
   },
   "list-simple" => {
+    "python" => python_views["list-simple"],
     "js" => <<-JS,
         function(head, req) {
           send("first chunk");
@@ -318,6 +431,7 @@ functions = {
     ERLANG
   },
   "list-chunky" => {
+    "python" => python_views["list-chunky"],
     "js" => <<-JS,
         function(head, req) {
           send("first chunk");
@@ -350,6 +464,7 @@ functions = {
     ERLANG
   },
   "list-old-style" => {
+    "python" => python_views["list-old-style"],
     "js" => <<-JS,
         function(head, req, foo, bar) {
           return "stuff";
@@ -362,6 +477,7 @@ functions = {
     ERLANG
   },
   "list-capped" => {
+    "python" => python_views["list-capped"],
     "js" => <<-JS,
         function(head, req) {
           send("bacon")
@@ -392,6 +508,7 @@ functions = {
     ERLANG
   },
   "list-raw" => {
+    "python" => python_views["list-raw"],
     "js" => <<-JS,
         function(head, req) {
           // log(this.toSource());
@@ -419,6 +536,7 @@ functions = {
     ERLANG
   },
   "filter-basic" => {
+    "python" => python_views["filter-basic"],
     "js" => <<-JS,
       function(doc, req) {
         if (doc.good) {
@@ -433,6 +551,7 @@ functions = {
     ERLANG
   },
   "update-basic" => {
+    "python" => python_views["update-basic"],
     "js" => <<-JS,
     function(doc, req) {
       doc.world = "hello";
@@ -448,6 +567,7 @@ functions = {
     ERLANG
   },
   "error" => {
+    "python" => python_views["error"],
     "js" => <<-JS,
     function() {
       throw(["error","error_key","testing"]);
@@ -460,6 +580,7 @@ functions = {
     ERLANG
   },
   "fatal" => {
+    "python" => python_views["fatal"],
     "js" => <<-JS,
     function() {
       throw(["fatal","error_key","testing"]);
