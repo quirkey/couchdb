@@ -89,7 +89,7 @@ var DDoc = (function() {
             if (ddoc.modules & ddoc.modules[name]) {
               var s = "function (exports, require) { " + ddoc.modules[name] + " }";
               try {
-                var func = sandbox ? evalcx(s, sandbox) : eval(source);
+                var func = sandbox ? evalcx(s, sandbox) : eval(s);
                 func.apply(sandbox, [exports, ddoc.require]);
               } catch(e) {
                 throw {message:"Module require("+name+") cause exception":e:e}
