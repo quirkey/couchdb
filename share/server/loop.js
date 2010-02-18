@@ -73,7 +73,7 @@ var DDoc = (function() {
             if (i+1 == funPath.length) {
               fun = point[funPath[i]]
               if (typeof fun != "function") {
-                fun = Couch.compileFunction(fun);
+                fun = Couch.compileFunction(fun, ddoc);
                 // cache the compiled fun on the ddoc
                 point[funPath[i]] = fun
               };
@@ -82,23 +82,7 @@ var DDoc = (function() {
             }
           };
 
-          // run the correct responder with the cmd body
-          
-          ddoc.require = function (name) {
-            var exports = {};
-            if (ddoc.modules && ddoc.modules[name]) {
-              var s = "function (exports, require) { " + ddoc.modules[name] + " }";
-              try {
-                var func = sandbox ? evalcx(s, sandbox) : eval(s);
-                func.apply(sandbox, [exports, ddoc.require]);
-              } catch(e) {
-                throw {message:"Module require("+name+") cause exception",e:e};
-              }
-            } else {
-              throw "No module named "+name;
-            }
-            return exports;
-          }
+          // run the correct responder with the cmd body          
           ddoc_dispatch[cmd].apply(null, [fun, ddoc, funArgs]);
           
         } else {

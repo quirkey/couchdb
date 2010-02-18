@@ -15,10 +15,27 @@ var Couch = {
   toJSON : function (val) {
     return JSON.stringify(val);
   },
-  compileFunction : function(source) {
+  compileFunction : function(source, ddoc) {    
     if (!source) throw(["error","not_found","missing function"]);
     try {
-      var functionObject = sandbox ? evalcx(source, sandbox) : eval(source);
+      if (sandbox) {
+        if (ddoc) {
+          sandbox.require = function (name) {
+            var exports = {};
+            if (ddoc.modules && ddoc.modules[name]) {
+              var s = "function (exports, require) { " + ddoc.modules[name] + " }";
+              try {
+                var func = sandbox ? evalcx(s, sandbox) : eval(s);
+                func.apply(sandbox, [exports, require]);
+              } catch(e) { throw {message:"Module require("+name+") cause exception",e:e}; }
+            } else { throw "No module named "+name; }
+            return exports;
+          }
+        }
+        var functionObject = evalcx(source, sandbox);
+      } else {
+        var functionObject = eval(source);
+      }
     } catch (err) {
       throw(["error", "compilation_error", err.toSource() + " (" + source + ")"]);
     };
