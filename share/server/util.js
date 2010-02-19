@@ -10,6 +10,37 @@
 // License for the specific language governing permissions and limitations under
 // the License.
 
+var resolveModule = function (name, parent, ddoc) {
+  if (parent == undefined && name[0] == '.') {
+    throw "Invalid name. View functions cannot perform relative require() imports."
+  } 
+  var split = name.split('/');
+  var current = ddoc;
+  if (name[0] != '.') {
+    parent = ddoc;
+  }
+  for (i=0;i<split.length;i+=1) {
+    var s = split[i];
+    if (s == '.') {
+      // Do nothing, at this point we should already be relative to the proper parent.
+    } else if ( s == '..') {
+      parent = parent.parent;
+    } else {
+      if (!parent[s]) {
+        current = current[s];
+        current.parent = parent;
+        parent = current;
+      } else {
+        throw 'Object has no property "'+s+'". '+JSON.stringify(current);
+      }
+    }
+  }
+  if (typeof current != "string") {
+    throw 'Require name did not resolve to a string value "'+name+'". '+JSON.stringify(current);
+  }
+  return [current, current.parent];
+}
+
 var Couch = {
   // moving this away from global so we can move to json2.js later
   toJSON : function (val) {
@@ -20,17 +51,18 @@ var Couch = {
     try {
       if (sandbox) {
         if (ddoc) {
-          sandbox.require = function (name) {
+          var require = function (name, parent) {
             var exports = {};
-            if (ddoc.modules && ddoc.modules[name]) {
-              var s = "function (exports, require) { " + ddoc.modules[name] + " }";
-              try {
-                var func = sandbox ? evalcx(s, sandbox) : eval(s);
-                func.apply(sandbox, [exports, require]);
-              } catch(e) { throw {message:"Module require("+name+") cause exception",e:e}; }
-            } else { throw "No module named "+name; }
+            var resolved = resolveModule(name, parent, ddoc);
+            var source = resolved[0]; parent = resolved[1];
+            var s = "function (exports, require) { " + source + " }";
+            try {
+              var func = sandbox ? evalcx(s, sandbox) : eval(s);
+              func.apply(sandbox, [exports, function (name) {return require(name, parent)}]);
+            } catch(e) { throw {message:"Module require("+name+") cause exception",e:e}; }
             return exports;
           }
+          sandbox.require = require;
         }
         var functionObject = evalcx(source, sandbox);
       } else {
