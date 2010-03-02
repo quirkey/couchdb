@@ -341,8 +341,8 @@ handle_info({'DOWN',_,_,_,_}, State) ->
 
 terminate(Reason, #group_state{updater_pid=Update, compactor_pid=Compact}=S) ->
     reply_all(S, Reason),
-    catch exit(Update, Reason),
-    catch exit(Compact, Reason),
+    couch_util:shutdown_sync(Update),
+    couch_util:shutdown_sync(Compact),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
@@ -380,8 +380,6 @@ prepare_group({RootDir, DbName, #group{sig=Sig}=Group}, ForceReset)->
                 % this can happen if we missed a purge
                 {ok, reset_file(Db, Fd, DbName, Group)};
             true ->
-                % 09 UPGRADE CODE
-                ok = couch_file:upgrade_old_header(Fd, <<$r, $c, $k, 0>>),
                 case (catch couch_file:read_header(Fd)) of
                 {ok, {Sig, HeaderInfo}} ->
                     % sigs match!

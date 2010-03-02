@@ -154,7 +154,7 @@ start_primary_services() ->
             {couch_server,
                 {couch_server, sup_start_link, []},
                 permanent,
-                1000,
+                10000,
                 worker,
                 [couch_server]},
             {couch_db_update_event,

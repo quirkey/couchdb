@@ -270,7 +270,8 @@ init([]) ->
 
 
 terminate(Reason, _Srv) ->
-    couch_util:terminate_linked(Reason),
+    [couch_util:shutdown_sync(Pid) || {Pid, _} <-
+            ets:tab2list(couch_groups_by_updater)],
     ok.
 
 
@@ -311,10 +312,7 @@ do_reset_indexes(DbName, Root) ->
         fun({_DbName, Sig}) ->
             ?LOG_DEBUG("Killing update process for view group ~s. in database ~s.", [Sig, DbName]),
             [{_, Pid}] = ets:lookup(group_servers_by_sig, {DbName, Sig}),
-            exit(Pid, kill),
-            receive {'EXIT', Pid, _} ->
-                delete_from_ets(Pid, DbName, Sig)
-            end
+            couch_util:shutdown_sync(Pid)
         end, Names),
     delete_index_dir(Root, DbName),
     file:delete(Root ++ "/." ++ ?b2l(DbName) ++ "_temp").

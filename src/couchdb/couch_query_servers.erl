@@ -39,7 +39,7 @@ start_link() ->
     gen_server:start_link({local, couch_query_servers}, couch_query_servers, [], []).
 
 stop() ->
-    exit(whereis(couch_query_servers), normal).
+    couch_util:shutdown_sync(whereis(couch_query_servers)).
 
 start_doc_map(Lang, Functions) ->
     Proc = get_os_process(Lang),
@@ -319,8 +319,13 @@ handle_info({'EXIT', Pid, Status}, {_, PidProcs, LangProcs, InUse}=Server) ->
         catch rem_from_list(InUse, Proc#proc.lang, Proc),
         {noreply, Server};
     [] ->
-        ?LOG_DEBUG("Unknown linked process died: ~p (reason: ~p)", [Pid, Status]),
-        {stop, Status, Server}
+        case Status of
+        normal ->
+            {noreply, Server};
+        _ ->
+            io:format("Unknown linked process died: ~p (reason: ~p)", [Pid, Status]),
+            {stop, Status, Server}
+        end
     end.
 
 code_change(_OldVsn, State, _Extra) ->

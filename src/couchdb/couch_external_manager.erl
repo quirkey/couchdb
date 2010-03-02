@@ -90,6 +90,7 @@ handle_info({'EXIT', Pid, normal}, Handlers) ->
     {noreply, Handlers};
 
 handle_info({'EXIT', Pid, Reason}, Handlers) ->
+    io:format("EXIT!!!!!!!!~n"),
     ?LOG_INFO("EXTERNAL: Server ~p died. (reason: ~p)", [Pid, Reason]),
     % Remove Pid from the handlers table so we don't try closing
     % it a second time in terminate/2.
