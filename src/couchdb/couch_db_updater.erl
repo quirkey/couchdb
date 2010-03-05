@@ -48,7 +48,8 @@ handle_call(get_db, _From, Db) ->
 handle_call(full_commit, _From, #db{waiting_delayed_commit=nil}=Db) ->
     {reply, ok, Db}; % no data waiting, return ok immediately
 handle_call(full_commit, _From,  Db) ->
-    {reply, ok, commit_data(Db)}; % commit the data and return ok
+    spawn_link(fun() -> commit_data(Db) end),
+    {reply, ok, Db#db{waiting_delayed_commit=nil}}; 
 handle_call(increment_update_seq, _From, Db) ->
     Db2 = commit_data(Db#db{update_seq=Db#db.update_seq+1}),
     ok = gen_server:call(Db2#db.main_pid, {db_updated, Db2}),
