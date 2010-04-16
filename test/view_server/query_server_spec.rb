@@ -513,10 +513,10 @@ describe "query server normal case" do
     @qs.reset!
     @qs.run(["add_fun", functions["emit-twice"][LANGUAGE]]).should == true
     @qs.run(["add_fun", functions["emit-once"][LANGUAGE]]).should == true
-    rows = @qs.run(["map_doc", {:a => "b"}])
-    rows[0][0].should == ["foo", "b"]
-    rows[0][1].should == ["bar", "b"]
-    rows[1][0].should == ["baz", "b"]
+    rows = @qs.run(["map_doc", [{:a => "b"}]])
+    rows[0][0][0].should == ["foo", "b"]
+    rows[0][0][1].should == ["bar", "b"]
+    rows[0][1][0].should == ["baz", "b"]
   end
   describe "reduce" do
     before(:all) do

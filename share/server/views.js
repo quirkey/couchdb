@@ -92,7 +92,7 @@ var Views = (function() {
     rereduce : function(reduceFuns, values) {
       runReduce(reduceFuns, null, values, true);
     },
-    mapDoc : function(doc) {
+    mapDoc : function(docs) {
       // Compute all the map functions against the document.
       //
       // Each function can output multiple key/value pairs for each document.
@@ -118,20 +118,25 @@ var Views = (function() {
 
       recursivelySeal(doc); // seal to prevent map functions from changing doc
       */
-      var buf = [];
-      for (var i = 0; i < State.funs.length; i++) {
-        map_results = [];
-        try {
-          State.funs[i](doc);
-          buf.push(Couch.toJSON(map_results));
-        } catch (err) {
-          handleViewError(err, doc);
-          // If the error is not fatal, we treat the doc as if it
-          // did not emit anything, by buffering an empty array.
-          buf.push("[]");
+      var result = [];
+      docs.forEach(function (doc) {
+        var buf = [];
+        for (var i = 0; i < State.funs.length; i++) {
+          map_results = [];
+          try {
+            State.funs[i](doc);
+            buf.push(Couch.toJSON(map_results));
+          } catch (err) {
+            handleViewError(err, doc);
+            // If the error is not fatal, we treat the doc as if it
+            // did not emit anything, by buffering an empty array.
+            buf.push("[]");
+          }
         }
-      }
-      print("[" + buf.join(", ") + "]");
+        result.push("[" + buf.join(", ") + "]")
+      })
+      
+      print("[" + result.join(", ") + "]");
     }
   }
 })();
