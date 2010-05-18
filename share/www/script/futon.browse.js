@@ -1181,7 +1181,6 @@
               var e = $('<a href="#expand">...</a>');
               var m = $('<a href="#min">X</a>');
               var expand = function (evt) {
-                console.log('asdf')
                 n.empty();
                 n.text(fulltext);
                 n.append(m);
