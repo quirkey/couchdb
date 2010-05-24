@@ -58,7 +58,6 @@ specific language governing permissions and limitations under the License.
               row.find("th").attr("rowspan", options.length);
             });
             $("#config tbody tr").removeClass("odd").filter(":odd").addClass("odd");
-
             $("#config tbody td.value code").makeEditable({
               accept: function(newValue) {
                 var row = $(this).parents("tr").eq(0);
@@ -68,6 +67,29 @@ specific language governing permissions and limitations under the License.
                 }}, row.data("section"), row.data("option"), newValue);
               }
             });
+            var add = $('<a href="#add" >+</a>').click(function () {
+              $.showDialog("dialog/_create_config.html", {
+                submit: function(data, callback) {
+                  var fail = false;
+                  if (!data.section || data.section.length == 0) {
+                    callback({section: "Please enter a section."});
+                    fail = true;
+                  }
+                  if (!data.option || data.option.length == 0) {
+                    callback({option: "Please enter a option."});
+                    fail = true;
+                  }
+                  if (!data.val || data.val.length == 0) {
+                    callback({val: "Please enter a value."});
+                    fail = true;
+                  }
+                  if (fail) {return}
+                  $.couch.config({ success: function () {callback();location.reload();} }
+                                 , data.section, data.option, data.val);
+                }
+              });
+            })
+            $("div#content").append(add)
           }
         });
 
